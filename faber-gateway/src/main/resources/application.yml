@@ -1,0 +1,101 @@
+server:
+  port: 8888
+
+spring:
+  main:
+    web-application-type: reactive
+  application:
+    name: faber-gateway
+
+  # 虚拟线程（JDK 21+）显式启用
+  threads:
+    virtual:
+      enabled: true
+
+  config:
+    import: "optional:nacos:"
+
+  cloud:
+    nacos:
+      config:
+        enabled: ${NACOS_ENABLED:true}
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:local}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        # Nacos 3.0 gRPC端口
+        grpc:
+          server-addr: ${NACOS_GRPC_SERVER:localhost:9848}
+        refresh:
+          enabled: true
+      discovery:
+        enabled: ${NACOS_DISCOVERY_ENABLED:true}
+        server-addr: ${spring.cloud.nacos.config.server-addr}
+        namespace: ${spring.cloud.nacos.config.namespace}
+        group: DEFAULT_GROUP
+        metadata:
+          k8s-cluster: ${K8S_CLUSTER_NAME:local}
+          version: ${APP_VERSION:1.0.0}
+
+    # K8s自适应配置
+    kubernetes:
+      discovery:
+        enabled: ${K8S_DISCOVERY_ENABLED:true}
+        all-namespaces: false
+      client:
+        trust-certs: ${K8S_TRUST_CERTS:false}
+
+    # 负载均衡配置
+    loadbalancer:
+      ribbon:
+        enabled: false
+      cache:
+        ttl: 5s
+      health-check:
+        interval: 15s
+
+    # Gateway 路由配置
+    # 注意：Spring Cloud Gateway 2025 版本使用 server.webflux 前缀
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          routes:
+            # Auth Service 路由
+            - id: auth-service
+              uri: lb://faber-auth-service
+              predicates:
+                - Path=/api/v1/auth/**
+              filters:
+                - StripPrefix=0
+
+          # 全局默认过滤器
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+          # 跨域配置
+          # 注意：allowCredentials: true 时不能使用 allowedOrigins: "*"
+          # 开发环境可以使用 allowedOriginPatterns 代替
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOriginPatterns: "*"
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowedHeaders: "*"
+                allowCredentials: false
+                maxAge: 3600
+
+# 日志配置
+logging:
+  level:
+    com.mszlu.ai: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.loadbalancer: DEBUG

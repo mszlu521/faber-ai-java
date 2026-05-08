@@ -1,0 +1,116 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: faber-auth-service
+
+  # 虚拟线程（JDK 21+）显式启用
+  threads:
+    virtual:
+      enabled: true
+
+  # 配置导入（替代bootstrap.yml的新方式）
+  config:
+    import:
+      # Nacos配置（开发和生产都使用，只是服务器地址不同）
+      - optional:nacos:shared-security.yaml?refreshEnabled=true
+      - optional:nacos:shared-database.yaml?refreshEnabled=true
+      - optional:nacos:shared-redis.yaml?refreshEnabled=true
+      - optional:nacos:${spring.application.name}.yaml?refreshEnabled=true
+      # K8s ConfigMap（如果在K8s内且启用，自动合并配置）
+      - optional:configmap:${spring.application.name}?namespace=${K8S_NAMESPACE:default}
+      - optional:secret:${spring.application.name}?namespace=${K8S_NAMESPACE:default}
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:15432}/${POSTGRES_DB:faber-ai-java}
+    username: ${POSTGRES_USER:mszluai}
+    password: ${POSTGRES_PASSWORD:mszlu123456}
+    driver-class-name: org.postgresql.Driver
+
+  cloud:
+    # Nacos 3.0 配置（所有环境统一配置，差异通过环境变量注入）
+    nacos:
+      config:
+        enabled: ${NACOS_ENABLED:true}
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:local}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        # Nacos 3.0 关键：gRPC端口配置（性能核心）
+        grpc:
+          server-addr: ${NACOS_GRPC_SERVER:localhost:9848}
+        # 配置刷新
+        refresh:
+          enabled: true
+      discovery:
+        enabled: ${NACOS_DISCOVERY_ENABLED:true}
+        server-addr: ${spring.cloud.nacos.config.server-addr}
+        namespace: ${spring.cloud.nacos.config.namespace}
+        group: DEFAULT_GROUP
+        # 注册时使用IP（K8s内外兼容）
+        ip: ${POD_IP:${spring.cloud.client.ip-address:127.0.0.1}}
+        port: ${SERVER_PORT:8080}
+        # 元数据（用于区分环境）
+        metadata:
+          k8s-cluster: ${K8S_CLUSTER_NAME:local}
+          version: ${APP_VERSION:1.0.0}
+
+    # K8s自适应配置
+    kubernetes:
+      config:
+        enabled: ${K8S_CONFIG_ENABLED:true}
+        namespace: ${K8S_NAMESPACE:default}
+        sources:
+          - name: ${spring.application.name}
+            namespace: ${K8S_NAMESPACE:default}
+      discovery:
+        enabled: ${K8S_DISCOVERY_ENABLED:true}
+        all-namespaces: false
+      client:
+        trust-certs: ${K8S_TRUST_CERTS:false}
+
+    # 负载均衡（统一使用Spring Cloud LoadBalancer，Ribbon已移除）
+    loadbalancer:
+      ribbon:
+        enabled: false
+      cache:
+        ttl: 5s
+        capacity: 256
+      health-check:
+        interval: 15s
+        refetch-instances-interval: 5s
+
+    # OpenFeign配置
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 10000
+            loggerLevel: basic
+      httpclient:
+        hc5:
+          enabled: true  # 使用Apache HttpClient 5
+      circuitbreaker:
+        enabled: true
+        group:
+          enabled: true
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_uuid
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# 日志配置
+logging:
+  level:
+    com.mszlu.ai: DEBUG
+    org.springframework.cloud: INFO
