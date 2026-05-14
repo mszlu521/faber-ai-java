@@ -42,6 +42,8 @@
         <module>faber-common/faber-common-spring-ai</module>
         <module>faber-gateway</module>
         <module>faber-service/faber-auth-service</module>
+        <module>faber-service/faber-agent-service</module>
+        <module>faber-service/faber-llm-service</module>
     </modules>
 
     <dependencyManagement>

@@ -11,7 +11,6 @@ spring:
   threads:
     virtual:
       enabled: true
-
   config:
     import: "optional:nacos:"
 
@@ -68,10 +67,23 @@ spring:
             - id: auth-service
               uri: lb://faber-auth-service
               predicates:
-                - Path=/api/v1/auth/**
+                - Path=/api/v1/auth/**,/api/v1/subscription/**
               filters:
                 - StripPrefix=0
-
+            - id: agent-service
+              uri: lb://faber-agent-service
+              predicates:
+                - Path=/api/v1/agents/**
+              filters:
+                - StripPrefix=0
+                - name: AuthFilter
+            - id: llm-service
+              uri: lb://faber-llm-service
+              predicates:
+                - Path=/api/v1/llms/**,/api/v1/provider-configs/**
+              filters:
+                - StripPrefix=0
+                - name: AuthFilter
           # 全局默认过滤器
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
@@ -92,7 +104,13 @@ spring:
                 allowedHeaders: "*"
                 allowCredentials: false
                 maxAge: 3600
-
+  autoconfigure:
+    exclude: com.mszlu.ai.common.security.config.SecurityAutoConfiguration
+# jwt配置
+jwt:
+  secret: ${JWT_SECRET:your-secret-key-here-must-be-at-least-32-characters-long}
+  expiration: ${JWT_EXPIRATION:604800000}
+  refresh-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000000}
 # 日志配置
 logging:
   level:

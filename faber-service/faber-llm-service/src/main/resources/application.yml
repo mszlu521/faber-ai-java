@@ -1,22 +1,19 @@
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8084}
 
 spring:
   application:
-    name: faber-auth-service
-  # 虚拟线程（JDK 21+）显式启用
+    name: faber-llm-service
+
   threads:
     virtual:
       enabled: true
-  # 配置导入（替代bootstrap.yml的新方式）
+
   config:
     import:
-      # Nacos配置（开发和生产都使用，只是服务器地址不同）
-      - optional:nacos:shared-security.yaml?refreshEnabled=true
       - optional:nacos:shared-database.yaml?refreshEnabled=true
       - optional:nacos:shared-redis.yaml?refreshEnabled=true
       - optional:nacos:${spring.application.name}.yaml?refreshEnabled=true
-      # K8s ConfigMap（如果在K8s内且启用，自动合并配置）
       - optional:configmap:${spring.application.name}?namespace=${K8S_NAMESPACE:default}
       - optional:secret:${spring.application.name}?namespace=${K8S_NAMESPACE:default}
 
@@ -26,8 +23,25 @@ spring:
     password: ${POSTGRES_PASSWORD:mszlu123456}
     driver-class-name: org.postgresql.Driver
 
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+
   cloud:
-    # Nacos 3.0 配置（所有环境统一配置，差异通过环境变量注入）
     nacos:
       config:
         enabled: ${NACOS_ENABLED:true}
@@ -35,10 +49,8 @@ spring:
         namespace: ${NACOS_NAMESPACE:local}
         group: DEFAULT_GROUP
         file-extension: yaml
-        # Nacos 3.0 关键：gRPC端口配置（性能核心）
         grpc:
           server-addr: ${NACOS_GRPC_SERVER:localhost:9848}
-        # 配置刷新
         refresh:
           enabled: true
       discovery:
@@ -46,15 +58,12 @@ spring:
         server-addr: ${spring.cloud.nacos.config.server-addr}
         namespace: ${spring.cloud.nacos.config.namespace}
         group: DEFAULT_GROUP
-        # 注册时使用IP（K8s内外兼容）
         ip: ${POD_IP:${spring.cloud.client.ip-address:127.0.0.1}}
-        port: ${SERVER_PORT:8080}
-        # 元数据（用于区分环境）
+        port: ${SERVER_PORT:8084}
         metadata:
           k8s-cluster: ${K8S_CLUSTER_NAME:local}
           version: ${APP_VERSION:1.0.0}
 
-    # K8s自适应配置
     kubernetes:
       config:
         enabled: ${K8S_CONFIG_ENABLED:true}
@@ -68,7 +77,6 @@ spring:
       client:
         trust-certs: ${K8S_TRUST_CERTS:false}
 
-    # 负载均衡（统一使用Spring Cloud LoadBalancer，Ribbon已移除）
     loadbalancer:
       ribbon:
         enabled: false
@@ -79,7 +87,6 @@ spring:
         interval: 15s
         refetch-instances-interval: 5s
 
-    # OpenFeign配置
     openfeign:
       client:
         config:
@@ -89,24 +96,44 @@ spring:
             loggerLevel: basic
       httpclient:
         hc5:
-          enabled: true  # 使用Apache HttpClient 5
+          enabled: true
       circuitbreaker:
         enabled: true
         group:
           enabled: true
-  mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-app:
-  base-url: http://localhost:8888
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,refresh
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      group:
+        liveness:
+          include: livenessState,ping
+        readiness:
+          include: readinessState,nacos,db,diskSpace
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      version: ${APP_VERSION:1.0.0}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId},%X{spanId}]"
+  #  structured:
+  #    format:
+  #      console: ecs
+  level:
+    com.mszlu.ai.llm: DEBUG
 # MyBatis-Plus 配置
 mybatis-plus:
   configuration:
@@ -121,8 +148,26 @@ jwt:
   secret: ${JWT_SECRET:your-secret-key-here-must-be-at-least-32-characters-long}
   expiration: ${JWT_EXPIRATION:604800000}
   refresh-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000000}
-# 日志配置
-logging:
-  level:
-    com.mszlu.ai: DEBUG
-    org.springframework.cloud: INFO
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  cloud:
+    nacos:
+      config:
+        namespace: dev
+      discovery:
+        namespace: dev
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  cloud:
+    nacos:
+      config:
+        namespace: prod
+      discovery:
+        namespace: prod

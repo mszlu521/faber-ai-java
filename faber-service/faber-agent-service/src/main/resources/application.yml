@@ -1,13 +1,15 @@
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8081}
 
 spring:
   application:
-    name: faber-auth-service
+    name: faber-agent-service
+
   # 虚拟线程（JDK 21+）显式启用
   threads:
     virtual:
       enabled: true
+
   # 配置导入（替代bootstrap.yml的新方式）
   config:
     import:
@@ -48,7 +50,7 @@ spring:
         group: DEFAULT_GROUP
         # 注册时使用IP（K8s内外兼容）
         ip: ${POD_IP:${spring.cloud.client.ip-address:127.0.0.1}}
-        port: ${SERVER_PORT:8080}
+        port: ${SERVER_PORT:8081}
         # 元数据（用于区分环境）
         metadata:
           k8s-cluster: ${K8S_CLUSTER_NAME:local}
@@ -94,19 +96,7 @@ spring:
         enabled: true
         group:
           enabled: true
-  mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-app:
-  base-url: http://localhost:8888
+
 # MyBatis-Plus 配置
 mybatis-plus:
   configuration:
@@ -115,14 +105,49 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: assign_uuid
+      logic-delete-field: deletedAt
+      logic-delete-value: "now()"
+      logic-not-delete-value: "null"
   type-handlers-package: com.mszlu.ai.common.config
-# jwt配置
+
+flyway:
+  enabled: false
+  locations: classpath:db/migration
+  baseline-on-migrate: true
+  baseline-version: 0  f
+# JWT 配置
 jwt:
-  secret: ${JWT_SECRET:your-secret-key-here-must-be-at-least-32-characters-long}
-  expiration: ${JWT_EXPIRATION:604800000}
-  refresh-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000000}
-# 日志配置
+  secret: ${JWT_SECRET:this-is-a-super-secret-jwt-key-for-faber-ai-platform-2026}
+  expiration: ${JWT_ACCESS_EXPIRATION:86400000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+# 服务端点（K8s探针 + 监控）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,refresh
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true  # 启用K8s存活/就绪探针
+      show-details: always
+      group:
+        liveness:
+          include: livenessState,ping
+        readiness:
+          include: readinessState,nacos,db,diskSpace
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      version: ${APP_VERSION:1.0.0}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
 logging:
   level:
-    com.mszlu.ai: DEBUG
-    org.springframework.cloud: INFO
+    com.mszlu.ai.agent: DEBUG
+    org.springframework.cloud.nacos: DEBUG
+    org.springframework.cloud.openfeign: DEBUG
