@@ -39,3 +39,5 @@ build/
 
 ### Mac OS ###
 .DS_Store
+faber-service/faber-tool-service/src/main/resources/application-prod.yml
+faber-service/faber-agent-service/src/main/resources/application-prod.yml

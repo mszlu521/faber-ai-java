@@ -41,7 +41,7 @@ public class AgentResponse {
     private Object deepConfig;
 
     // 关联的实体信息
-//    private List<ToolDTO> tools;
+    private List<ToolDTO> tools;
 //    private List<KnowledgeBaseDTO> knowledgeBases;
 //    private List<WorkflowDTO> workflows;
 //    private List<AgentMarketDTO> agentMarkets;

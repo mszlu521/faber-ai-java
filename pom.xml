@@ -44,6 +44,7 @@
         <module>faber-service/faber-auth-service</module>
         <module>faber-service/faber-agent-service</module>
         <module>faber-service/faber-llm-service</module>
+        <module>faber-service/faber-tool-service</module>
     </modules>
 
     <dependencyManagement>

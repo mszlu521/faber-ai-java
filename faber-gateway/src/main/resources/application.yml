@@ -84,6 +84,13 @@ spring:
               filters:
                 - StripPrefix=0
                 - name: AuthFilter
+            - id: tool-service
+              uri: lb://faber-tool-service
+              predicates:
+                - Path=/api/v1/tools/**
+              filters:
+                - StripPrefix=0
+                - name: AuthFilter
           # 全局默认过滤器
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin

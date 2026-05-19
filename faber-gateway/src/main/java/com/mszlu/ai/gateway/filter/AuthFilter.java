@@ -83,7 +83,7 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
     }
 
     private String toJson(Result<Void> result) {
-        return String.format("{\"code\":%d,\"msg\":\"%s\"}", result.getCode(), result.getMessage());
+        return String.format("{\"code\":%d,\"msg\":\"%s\"}", result.getCode(), result.getMsg());
     }
 
     private String extractToken(ServerHttpRequest request) {

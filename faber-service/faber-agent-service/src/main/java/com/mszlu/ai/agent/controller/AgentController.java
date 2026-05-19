@@ -49,4 +49,14 @@ public class AgentController {
                         .data(message)
                         .build());
     }
+    @PostMapping("/{id}/tools/batch")
+    public Result<Void> batchAddTools(@PathVariable UUID id, @RequestBody ToolBatchAddRequest request) {
+        agentService.batchAddTools(id, request);
+        return Result.success();
+    }
+    @DeleteMapping("/{id}/tools/{toolId}")
+    public Result<Void> deleteTool(@PathVariable UUID id, @PathVariable UUID toolId) {
+        agentService.deleteTool(id, toolId);
+        return Result.success();
+    }
 }

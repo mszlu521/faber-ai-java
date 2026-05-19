@@ -6,16 +6,25 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mszlu.ai.agent.dto.*;
 import com.mszlu.ai.agent.entity.Agent;
+import com.mszlu.ai.agent.entity.AgentTool;
+import com.mszlu.ai.agent.feign.ToolServiceClient;
 import com.mszlu.ai.agent.mapper.AgentMapper;
+import com.mszlu.ai.agent.mapper.AgentToolMapper;
 import com.mszlu.ai.common.exception.BusinessException;
+import com.mszlu.ai.common.result.Result;
 import com.mszlu.ai.common.result.ResultCode;
 import com.mszlu.ai.common.security.context.UserContext;
+import com.mszlu.ai.core.tools.registry.ToolRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -24,6 +33,8 @@ import java.util.UUID;
 public class AgentService {
     private final AgentMapper agentMapper;
     private final ObjectMapper objectMapper;
+    private final AgentToolMapper agentToolMapper;
+    private final ToolServiceClient toolServiceClient;
     public AgentListResponse listAgents(AgentQueryRequest request) {
         UUID userId = UserContext.getUserId();
         LambdaQueryWrapper<Agent> queryWrapper = new LambdaQueryWrapper<>();
@@ -124,7 +135,26 @@ public class AgentService {
             throw new BusinessException(ResultCode.AGENT_NOT_FOUND);
         }
         //这里注意后续我们关联工具等信息时，这里需要都关联查询出来
-        return toResponse(agent);
+        AgentResponse response = toResponse(agent);
+        response.setTools(buildTools(agent.getId()));
+        return response;
+    }
+
+    private List<ToolDTO> buildTools(UUID agentId) {
+        LambdaQueryWrapper<AgentTool> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(AgentTool::getAgentId, agentId);
+        List<AgentTool> agentTools = agentToolMapper.selectList(queryWrapper);
+        if (agentTools == null || agentTools.isEmpty()){
+            return Collections.emptyList();
+        }
+        List<ToolDTO> list = new ArrayList<>();
+        for (AgentTool agentTool : agentTools) {
+            Result<ToolDTO> tool = toolServiceClient.getTool(agentTool.getToolId());
+            if (tool.getData() != null){
+                list.add(tool.getData());
+            }
+        }
+        return list;
     }
 
     public AgentResponse updateAgent(AgentUpdateRequest request) {
@@ -187,5 +217,45 @@ public class AgentService {
         queryWrapper.eq(Agent::getId, id)
                 .eq(Agent::getCreatorId, userId);
         agentMapper.delete(queryWrapper);
+    }
+
+    @Transactional
+    public void batchAddTools(UUID agentId, ToolBatchAddRequest request) {
+        UUID userId = UserContext.getUserId();
+        LambdaQueryWrapper<Agent> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Agent::getId, agentId)
+                .eq(Agent::getCreatorId, userId);
+        Agent agent = agentMapper.selectOne(queryWrapper);
+        if (agent == null){
+            throw new BusinessException(ResultCode.AGENT_NOT_FOUND);
+        }
+        //清空现有绑定
+        LambdaQueryWrapper<AgentTool> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(AgentTool::getAgentId, agentId);
+        agentToolMapper.delete(deleteWrapper);
+        //写入新的绑定
+        for (ToolBatchAddRequest.ToolItem toolItem : request.getTools()) {
+            AgentTool agentTool = new AgentTool();
+            agentTool.setAgentId(agentId);
+            agentTool.setToolId(toolItem.getId());
+            agentTool.setStatus("active");
+            agentTool.setCreatedAt(OffsetDateTime.now());
+            agentToolMapper.insert(agentTool);
+        }
+    }
+
+    public void deleteTool(UUID id, UUID toolId) {
+        UUID userId = UserContext.getUserId();
+        LambdaQueryWrapper<Agent> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Agent::getId, id)
+                .eq(Agent::getCreatorId, userId);
+        Agent agent = agentMapper.selectOne(queryWrapper);
+        if (agent == null){
+            throw new BusinessException(ResultCode.AGENT_NOT_FOUND);
+        }
+        LambdaQueryWrapper<AgentTool> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(AgentTool::getAgentId, id)
+                .eq(AgentTool::getToolId, toolId);
+        agentToolMapper.delete(deleteWrapper);
     }
 }
