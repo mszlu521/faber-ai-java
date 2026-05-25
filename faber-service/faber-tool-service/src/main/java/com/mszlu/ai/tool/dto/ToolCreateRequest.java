@@ -9,4 +9,6 @@ public class ToolCreateRequest {
     private String name;
     private String description;
     private boolean isEnabled = true;
+    private String toolType;
+    private McpConfigRequest mcpConfig;
 }

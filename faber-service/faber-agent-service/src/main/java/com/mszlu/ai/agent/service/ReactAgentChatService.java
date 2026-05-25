@@ -6,6 +6,7 @@ import com.alibaba.cloud.ai.graph.streaming.OutputType;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mszlu.ai.agent.callback.McpToolCallback;
 import com.mszlu.ai.agent.config.ChatModelConfig;
 import com.mszlu.ai.agent.dto.AgentMessage;
 import com.mszlu.ai.agent.dto.ToolDTO;
@@ -13,23 +14,22 @@ import com.mszlu.ai.agent.entity.Agent;
 import com.mszlu.ai.agent.feign.LlmServiceClient;
 import com.mszlu.ai.common.result.Result;
 import com.mszlu.ai.common.security.context.UserContext;
+import com.mszlu.ai.core.tools.mcp.McpClientService;
+import com.mszlu.ai.core.tools.mcp.McpConfig;
 import com.mszlu.ai.core.tools.registry.ToolRegistry;
+import io.modelcontextprotocol.spec.McpSchema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * ReAct智能体聊天服务
@@ -75,6 +75,7 @@ public class ReactAgentChatService {
      */
     private final ChatModelConfig chatModelConfig;
     private final ToolRegistry toolRegistry;
+    private final McpClientService mcpClientService;
 
     /**
      * 智能体消息处理入口
@@ -317,12 +318,48 @@ public class ReactAgentChatService {
     private List<ToolCallback> buildToolCallbacks(Agent agent) {
         //先查出关联的tool
         List<ToolDTO> agentTools = commonService.getAgentTools(agent.getId());
-        List<String> toolNames = agentTools.stream().map(ToolDTO::getName).toList();
-        List<Object> instances = toolRegistry.getBeanInstances(toolNames);
-        MethodToolCallbackProvider provider = MethodToolCallbackProvider.builder()
-                .toolObjects(instances.toArray())
-                .build();
-        return Arrays.asList( provider.getToolCallbacks());
+        if (agentTools.isEmpty()){
+            return Collections.emptyList();
+        }
+        List<ToolCallback> toolCallbacks = new ArrayList<>();
+        //先处理系统工具 过滤系统工具
+        List<String> systemToolName = agentTools.stream()
+                .filter(tool -> tool.getToolType().equals("system"))
+                .map(ToolDTO::getName).toList();
+        if (!systemToolName.isEmpty()){
+            List<Object> instances = toolRegistry.getBeanInstances(systemToolName);
+            if (!instances.isEmpty()){
+                MethodToolCallbackProvider provider = MethodToolCallbackProvider.builder()
+                        .toolObjects(instances.toArray())
+                        .build();
+                toolCallbacks.addAll(Arrays.asList(provider.getToolCallbacks()));
+            }
+        }
+        //处理mcp工具
+        List<ToolDTO> mcpTools = agentTools.stream()
+                .filter(tool -> tool.getToolType().equals("mcp"))
+                .toList();
+        for (ToolDTO mcpTool : mcpTools) {
+            try {
+                if (mcpTool.getMcpConfig() == null || mcpTool.getMcpConfig().isEmpty()){
+                    continue;
+                }
+                McpConfig mcpConfig = objectMapper.readValue(mcpTool.getMcpConfig(), McpConfig.class);
+                List<McpSchema.Tool> tools = mcpClientService.fetchToolsFromMcpServer(mcpConfig);
+                //将mcp的tool转成toolCallback
+                for (McpSchema.Tool mcpSchemaTool : tools) {
+                    ToolCallback toolCallback = createMcpToolCallback(mcpSchemaTool, mcpConfig);
+                    toolCallbacks.add(toolCallback);
+                }
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return toolCallbacks;
+    }
+
+    private ToolCallback createMcpToolCallback(McpSchema.Tool mcpSchemaTool, McpConfig mcpConfig) {
+        return new McpToolCallback(mcpSchemaTool, mcpConfig,mcpClientService);
     }
 
     /**

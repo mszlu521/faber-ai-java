@@ -45,6 +45,8 @@
         <module>faber-service/faber-agent-service</module>
         <module>faber-service/faber-llm-service</module>
         <module>faber-service/faber-tool-service</module>
+        <module>faber-service/faber-mcp-service</module>
+        <module>faber-service/faber-knowledge-service</module>
     </modules>
 
     <dependencyManagement>

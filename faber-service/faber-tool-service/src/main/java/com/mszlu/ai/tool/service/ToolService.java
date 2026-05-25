@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mszlu.ai.common.exception.BusinessException;
 import com.mszlu.ai.common.result.ResultCode;
 import com.mszlu.ai.common.security.context.UserContext;
+import com.mszlu.ai.core.tools.mcp.McpClientService;
+import com.mszlu.ai.core.tools.mcp.McpConfig;
 import com.mszlu.ai.core.tools.metadata.ToolMetadata;
 import com.mszlu.ai.core.tools.registry.ToolRegistry;
 import com.mszlu.ai.tool.dto.*;
@@ -14,6 +16,7 @@ import com.mszlu.ai.tool.entity.AgentTool;
 import com.mszlu.ai.tool.entity.Tool;
 import com.mszlu.ai.tool.mapper.AgentToolMapper;
 import com.mszlu.ai.tool.mapper.ToolMapper;
+import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,10 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -37,13 +37,10 @@ public class ToolService {
     private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper;
     private final AgentToolMapper agentToolMapper;
+    private final McpClientService mcpClientService;
     public ToolResponse createTool(@Valid ToolCreateRequest request) {
         UUID userId = UserContext.getUserId();
         String toolName = request.getName();
-        //检查tool是否在系统重注册
-        if (!toolRegistry.contains(toolName)){
-            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND);
-        }
         //检查同一个用户是否已经存在同名的tool
         LambdaQueryWrapper<Tool> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Tool::getCreatorId, userId);
@@ -51,16 +48,32 @@ public class ToolService {
         if (toolMapper.selectCount(queryWrapper) > 0){
             throw new BusinessException(ResultCode.RESOURCE_ALREADY_EXISTS);
         }
-        ToolMetadata metadata = toolRegistry.getMetadata(toolName);
         Tool tool = new Tool();
         tool.setCreatorId(userId);
         tool.setName(toolName);
-        tool.setDescription(metadata.getDescription());
+        tool.setToolType(request.getToolType());
         tool.setIsEnable(request.isEnabled());
-        tool.setParametersSchema(metadata.getParametersSchema());
-        tool.setMcpConfig(null);
-        //后续我们添加mcp工具
-        tool.setToolType("system");
+        if (Objects.equals(request.getToolType(), "mcp")){
+            //处理mcp的工具
+            if (request.getMcpConfig() != null){
+                try {
+                    String json = objectMapper.writeValueAsString(request.getMcpConfig());
+                    tool.setMcpConfig(json);
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            tool.setDescription(request.getDescription());
+        }else{
+            //检查tool是否在系统重注册
+            if (!toolRegistry.contains(toolName)){
+                throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND);
+            }
+            ToolMetadata metadata = toolRegistry.getMetadata(toolName);
+            tool.setDescription(metadata.getDescription());
+            tool.setParametersSchema(metadata.getParametersSchema());
+            tool.setMcpConfig(null);
+        }
         toolMapper.insert(tool);
         return toResponse(tool);
     }
@@ -248,5 +261,50 @@ public class ToolService {
 
     public Tool getTool(UUID id) {
         return toolMapper.selectById(id);
+    }
+
+    public List<ToolResponse> getMcpTools(UUID mcpId) {
+        Tool mcpTool = toolMapper.selectById(mcpId);
+        if (mcpTool == null){
+            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND);
+        }
+        if (!"mcp".equals(mcpTool.getToolType())){
+            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND);
+        }
+        if (mcpTool.getMcpConfig() == null){
+            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND);
+        }
+        McpConfig mcpConfig ;
+        try {
+            mcpConfig = objectMapper.readValue(mcpTool.getMcpConfig(), McpConfig.class);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND);
+        }
+        //获取mcp工具列表
+        List<McpSchema.Tool> tools = mcpClientService.fetchToolsFromMcpServer(mcpConfig);
+        return tools.stream().map(tool -> convertToolResponse(tool,mcpTool)).toList();
+    }
+
+    private ToolResponse convertToolResponse(McpSchema.Tool tool, Tool mcpTool) {
+        Map<String, Object> parametersSchema = null;
+        if (tool.inputSchema() != null){
+            try {
+                String schemaJson = objectMapper.writeValueAsString(tool.inputSchema());
+                parametersSchema = objectMapper.readValue(schemaJson, Map.class);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return ToolResponse.builder()
+                .id(mcpTool.getId())
+                .creatorId(mcpTool.getCreatorId())
+                .name(tool.name())
+                .description(tool.description())
+                .toolType("mcp")
+                .parametersSchema(parametersSchema)
+                .isEnabled(true)
+                .createdAt(mcpTool.getCreatedAt())
+                .updatedAt(mcpTool.getUpdatedAt())
+                .build();
     }
 }

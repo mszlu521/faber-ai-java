@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -51,5 +52,9 @@ public class ToolController {
     @GetMapping("/{id}")
     public Result<Tool> getTool(@PathVariable UUID id) {
         return Result.success(toolService.getTool(id));
+    }
+    @GetMapping("/mcp/{mcpId}/tools")
+    public Result<List<ToolResponse>> listToolsByMcpId(@PathVariable UUID mcpId) {
+        return Result.success(toolService.getMcpTools(mcpId));
     }
 }

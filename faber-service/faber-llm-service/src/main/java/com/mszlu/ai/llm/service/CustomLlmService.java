@@ -133,10 +133,11 @@ public class CustomLlmService {
                 .providerConfig(toProviderConfigResponse(providerConfig)).build();
     }
 
-    public List<CustomLlmResponse> listAllLlm() {
+    public List<CustomLlmResponse> listAllLlm(String modelType) {
         UUID userId = UserContext.getUserId();
         LambdaQueryWrapper<CustomLlm> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(CustomLlm::getUserId, userId);
+        queryWrapper.eq(StringUtils.isNotBlank(modelType),CustomLlm::getModelType, modelType);
         List<CustomLlm> customLlms = this.customLlmMapper.selectList(queryWrapper);
         return customLlms.stream().map(this::toResponse).collect(Collectors.toList());
     }

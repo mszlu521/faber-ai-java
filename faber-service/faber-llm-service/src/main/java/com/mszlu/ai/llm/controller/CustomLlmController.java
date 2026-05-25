@@ -41,8 +41,8 @@ public class CustomLlmController {
         return Result.success(response);
     }
     @GetMapping("/all")
-    public Result<List<CustomLlmResponse>> listAllLlm() {
-        List<CustomLlmResponse> response = customLlmService.listAllLlm();
+    public Result<List<CustomLlmResponse>> listAllLlm(@RequestParam("modelType") String modelType) {
+        List<CustomLlmResponse> response = customLlmService.listAllLlm(modelType);
         return Result.success(response);
     }
     @DeleteMapping("/{id}")

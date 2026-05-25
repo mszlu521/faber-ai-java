@@ -1,24 +1,19 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8085}
 
 spring:
   application:
-    name: faber-agent-service
+    name: faber-knowledge-service
 
-  # 虚拟线程（JDK 21+）显式启用
   threads:
     virtual:
       enabled: true
 
-  # 配置导入（替代bootstrap.yml的新方式）
   config:
     import:
-      # Nacos配置（开发和生产都使用，只是服务器地址不同）
-      - optional:nacos:shared-security.yaml?refreshEnabled=true
       - optional:nacos:shared-database.yaml?refreshEnabled=true
       - optional:nacos:shared-redis.yaml?refreshEnabled=true
       - optional:nacos:${spring.application.name}.yaml?refreshEnabled=true
-      # K8s ConfigMap（如果在K8s内且启用，自动合并配置）
       - optional:configmap:${spring.application.name}?namespace=${K8S_NAMESPACE:default}
       - optional:secret:${spring.application.name}?namespace=${K8S_NAMESPACE:default}
 
@@ -28,8 +23,13 @@ spring:
     password: ${POSTGRES_PASSWORD:mszlu123456}
     driver-class-name: org.postgresql.Driver
 
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+
   cloud:
-    # Nacos 3.0 配置（所有环境统一配置，差异通过环境变量注入）
     nacos:
       config:
         enabled: ${NACOS_ENABLED:true}
@@ -37,10 +37,8 @@ spring:
         namespace: ${NACOS_NAMESPACE:local}
         group: DEFAULT_GROUP
         file-extension: yaml
-        # Nacos 3.0 关键：gRPC端口配置（性能核心）
         grpc:
           server-addr: ${NACOS_GRPC_SERVER:localhost:9848}
-        # 配置刷新
         refresh:
           enabled: true
       discovery:
@@ -48,15 +46,11 @@ spring:
         server-addr: ${spring.cloud.nacos.config.server-addr}
         namespace: ${spring.cloud.nacos.config.namespace}
         group: DEFAULT_GROUP
-        # 注册时使用IP（K8s内外兼容）
         ip: ${POD_IP:${spring.cloud.client.ip-address:127.0.0.1}}
-        port: ${SERVER_PORT:8081}
-        # 元数据（用于区分环境）
+        port: ${SERVER_PORT:8085}
         metadata:
           k8s-cluster: ${K8S_CLUSTER_NAME:local}
           version: ${APP_VERSION:1.0.0}
-
-    # K8s自适应配置
     kubernetes:
       config:
         enabled: ${K8S_CONFIG_ENABLED:true}
@@ -70,7 +64,6 @@ spring:
       client:
         trust-certs: ${K8S_TRUST_CERTS:false}
 
-    # 负载均衡（统一使用Spring Cloud LoadBalancer，Ribbon已移除）
     loadbalancer:
       ribbon:
         enabled: false
@@ -81,7 +74,6 @@ spring:
         interval: 15s
         refetch-instances-interval: 5s
 
-    # OpenFeign配置
     openfeign:
       client:
         config:
@@ -91,37 +83,21 @@ spring:
             loggerLevel: basic
       httpclient:
         hc5:
-          enabled: true  # 使用Apache HttpClient 5
+          enabled: true
       circuitbreaker:
         enabled: true
         group:
           enabled: true
+  ai:
+    vectorstore:
+      milvus:
+        database-name: faber_ai
+        client:
+          host: ${MILVUS_HOST:127.0.0.1}
+          port: ${MILVUS_PORT:19530}
+          username: ${MILVUS_USER:mszluai}
+          password: ${MILVUS_PASSWORD:mszlu123456}
 
-# MyBatis-Plus 配置
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-  global-config:
-    db-config:
-      id-type: assign_uuid
-      logic-delete-field: deletedAt
-      logic-delete-value: "now()"
-      logic-not-delete-value: "null"
-  type-handlers-package: com.mszlu.ai.common.config
-
-flyway:
-  enabled: false
-  locations: classpath:db/migration
-  baseline-on-migrate: true
-  baseline-version: 0  f
-# JWT 配置
-jwt:
-  secret: ${JWT_SECRET:this-is-a-super-secret-jwt-key-for-faber-ai-platform-2026}
-  expiration: ${JWT_ACCESS_EXPIRATION:86400000}
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
-
-# 服务端点（K8s探针 + 监控）
 management:
   endpoints:
     web:
@@ -131,7 +107,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true  # 启用K8s存活/就绪探针
+        enabled: true
       show-details: always
       group:
         liveness:
@@ -145,12 +121,50 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
-
+jwt:
+  secret: ${JWT_SECRET:this-is-a-super-secret-jwt-key-for-faber-ai-platform-2026}
+  expiration: ${JWT_ACCESS_EXPIRATION:86400000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId},%X{spanId}]"
+  #  structured:
+  #    format:
+  #      console: ecs
   level:
-    com.mszlu.ai.agent: DEBUG
-    org.springframework.cloud.nacos: DEBUG
-    org.springframework.cloud.openfeign: DEBUG
+    com.mszlu.ai.llm: DEBUG
+# MyBatis-Plus 配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_uuid
+  type-handlers-package: com.mszlu.ai.common.config
 amap:
   api:
     key: "xxx"
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  cloud:
+    nacos:
+      config:
+        namespace: dev
+      discovery:
+        namespace: dev
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  cloud:
+    nacos:
+      config:
+        namespace: prod
+      discovery:
+        namespace: prod

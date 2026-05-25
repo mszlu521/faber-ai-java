@@ -91,6 +91,13 @@ spring:
               filters:
                 - StripPrefix=0
                 - name: AuthFilter
+            - id: knowledge-service
+              uri: lb://faber-knowledge-service
+              predicates:
+                - Path=/api/v1/knowledge/**
+              filters:
+                - StripPrefix=0
+                - name: AuthFilter
           # 全局默认过滤器
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin

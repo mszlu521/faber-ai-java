@@ -1,0 +1,32 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: faber-mcp-service
+
+  ai:
+    mcp:
+      server:
+        # 启用 MCP Server
+        enabled: true
+        # 设置协议为 STREAMABLE（必须）
+        protocol: STREAMABLE
+        # 服务器名称
+        name: faber-mcp-server
+        # 服务器版本
+        version: 1.0.0
+        # Streamable HTTP 配置
+        streamable-http:
+          # 启用 Streamable HTTP 传输
+          enabled: true
+          # MCP 端点路径
+          endpoint: /mcp
+          # 是否保持会话状态（true=有状态，false=无状态）
+          stateful: false
+
+# 日志配置
+logging:
+  level:
+    com.mszlu.ai.mcp: DEBUG
+    io.modelcontextprotocol: DEBUG
