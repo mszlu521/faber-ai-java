@@ -42,9 +42,7 @@ public class DocumentChunk extends BaseEntity {
     @Getter
     @RequiredArgsConstructor
     public enum Status {
-        PENDING("pending", "待处理"),
-        INDEXED("indexed", "已索引"),
-        FAILED("failed", "索引失败");
+        ACTIVE("active", "正常");
 
         private final String value;
         private final String desc;

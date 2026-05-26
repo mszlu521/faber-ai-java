@@ -167,6 +167,54 @@
                 <artifactId>mapstruct-processor</artifactId>
                 <version>${mapstruct.version}</version>
             </dependency>
+            <!-- 使用 Apache PDFBox 解析 PDF 文档，支持按页或按段落解析 -->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-apache-pdfbox</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
+            <!--使用 Apache Tika 库自动检测并解析各种文档格式。Tika 是一个强大的文档解析工具 -->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-tika</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
+            <!-- 使用 JSoup 解析 HTML 文档，提取文本和元数据 -->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-bibtex</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
+            <!--批量解析目录中的文件，支持 glob 模式匹配、递归扫描、采样等功能-->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-directory</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
+            <!--解析 Markdown 文档，支持代码块、引用、标题等结构化元素-->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-markdown</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
+            <!--使用阿里云 DashScope 进行图像 OCR 和语音转文字（STT）-->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-multi-modality</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
+            <!--使用 Tabula 从 PDF 中提取表格数据-->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-pdf-tables</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
+            <!--解析 YAML 配置文件，支持转换为结构化文档-->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-document-parser-yaml</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
